@@ -10,7 +10,7 @@ To set up and run the project locally, follow these steps:
 
 1. **Clone the repository**:
    ```bash
-   git clone [https://github.com/your-username/your-repo.git](https://github.com/john-rock/docs-image-checker.git)
+   git clone https://github.com/john-rock/docs-image-checker.git
    cd docs-image-checker
     ```
 2. Install dependencies
