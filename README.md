@@ -1,7 +1,5 @@
 # Docs Image Checker
 
-Brief description of the project. Mention its purpose, main features, and technologies used.
-
 ## Table of Contents
 - [Running Locally](#running-locally)
 - [Project Structure](#project-structure)
