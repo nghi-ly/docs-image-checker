@@ -1,9 +1,3 @@
-// 1. Run through all files on doc
-// 2. Check all image files (/static/img)
-// 3. Compare image links found in static to the links found in every other file
-// 4. Output any unused image files
-// 5. Auto open PR which removes unused images
-
 const glob = require('glob');
 const path = require('path');
 const fs = require('fs-extra');
@@ -11,7 +5,6 @@ const fs = require('fs-extra');
 const DOCS_DIR = '/Users/ly/docs.getdbt.com/website'
 
 const getFiles = (pattern) => {
-
     console.log(pattern)
     console.log('In getFiles')
     return glob.sync(pattern) // match files that fit a pattern like all PNG files (*.png)
@@ -24,57 +17,88 @@ const getImageFiles = () => {
 
 }
 
+// Get all reference files
 const getReferenceFiles = () => {
     console.log('In getReferenceFiles')
 
     const patterns = [
-        //`${DOCS_DIR}/docs/guides/*.{md,mdx}`,
-        `${DOCS_DIR}/docs/docs/**/*.{md,mdx}`,
-    ]
+        `${DOCS_DIR}/docs/**/*.{md,mdx}`, // Include docs files
+        `${DOCS_DIR}/blog/**/*.{md,mdx}`, // Include blog posts
+    ];
 
-    return patterns.flatMap(pattern => getFiles(pattern))
+    return patterns.flatMap(pattern => getFiles(pattern));
 }
-const imageChecker = async (baseImgFilename, fileList) => {
-    let matched = 0
-    //console.log('Image checker base filename:', baseImgFilename)
-    for (let file of fileList) {
-        //console.log('Ref file path: ', file)
-        //fs.createReadStream(filePath)
-        await fs.readFile(file, function (err, data) {
-            if (err) throw err;
-            if (data.includes(baseImgFilename)) {
-                console.log('CHECKER MATCHED: ', baseImgFilename, 'in file', file)
-                matched = 1
+
+// Check if an image is used in reference files
+const isImageUsed = async (baseImgFilename, fileList) => {
+    // Generate various paths and patterns for checking
+    const relativeImagePath = path.relative(DOCS_DIR, baseImgFilename).replace(/\\/g, '/'); // Convert backslashes to forward slashes
+    const imagePathInSrc = `/static/${relativeImagePath.replace(/^static\//, '')}`; // Handle images in src folder
+    const imageName = path.basename(baseImgFilename); // Image name with extension
+    const imageBaseName = path.basename(baseImgFilename, path.extname(baseImgFilename)); // Image name without extension
+
+    // Define regex patterns to match various ways an image might be referenced
+    const patterns = [
+        relativeImagePath, // Relative path to image
+        imagePathInSrc, // Relative path to image in src folder
+        imageName, // Image name with extension
+        imageBaseName, // Image name without extension
+        `url\\(['"]?${relativeImagePath}['"]?\\)`, // URL with relative path to image
+        `src=['"]?${relativeImagePath}['"]?`, // src attribute with relative path to image
+        `icon=['"]?${imageBaseName}['"]?` // icon attribute with image name
+    ];
+
+    // Combine patterns into a single regex
+    const regex = new RegExp(patterns.join('|'), 'g');
+
+    // Initialize a variable to track if the image is found
+    let isUsed = false;
+
+    // Check each reference file for the image
+    for (const file of fileList) {
+        try {
+            // Read the file content asynchronously
+            const data = await fs.promises.readFile(file, 'utf8');
+
+            // Test the content against the regex patterns
+            if (regex.test(data)) {
+                isUsed = true; // Image is used
+                break; // Exit the loop early if the image is found
             }
-        })
-
-    }
-    if (!matched) {
-        console.log('NO MATCHES: ', baseImgFilename)
+        } catch (err) {
+            console.error('Error reading file:', file, err);
+        }
     }
 
-}
+    return isUsed; // Return whether the image is used
+};
+
+// Main function to find unused images
 const findUnusedImages = async () => {
-    const imageFiles = getImageFiles()
-    const referenceFiles = getReferenceFiles()
-    const unusedImages = []
-    const keepImages = ['/path/to/testExample.txt']
+    const imageFiles = getImageFiles();
+    const referenceFiles = getReferenceFiles();
+    const unusedImages = [];
 
-    //console.log('Image Files:' , imageFiles)
-    //console.log('Reference Files:' , referenceFiles)
-    console.log('In findUnusedImages')
+    console.log('Scanning in progress...');
 
-    for (let imgFile of imageFiles) {
-        const baseFilename = path.parse(imgFile).base;
-
-        //console.log('Inside loop. Img file:' , imgFile)
-        await imageChecker(baseFilename, referenceFiles);
-
-        //break;
-
+    // For each image file, check if it is used in reference files
+    for (const imgFile of imageFiles) {
+        const used = await isImageUsed(imgFile, referenceFiles);
+        
+        if (!used) {
+            unusedImages.push(imgFile); // Collect unused images
+        }
     }
 
-    //console.log('Outside loop')
+    // Output unused images
+    if (unusedImages.length > 0) {
+        console.log('Unused Images:');
+        unusedImages.forEach((image) => console.log(image));
+    } else {
+        console.log('No unused images found.');
+    }
 }
 
-findUnusedImages()
+findUnusedImages().catch((err) => {
+    console.error(err);
+});
